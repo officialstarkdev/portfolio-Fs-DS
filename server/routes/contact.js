@@ -17,7 +17,10 @@ const limiter = rateLimit({
 /* Optional email notification if SMTP env vars are set. */
 async function notifyByEmail({ name, email, message }) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO } = process.env
-  if (!SMTP_HOST || !MAIL_TO) return
+  if (!SMTP_HOST || !MAIL_TO) {
+    console.warn('Email skipped — missing SMTP_HOST or MAIL_TO env var')
+    return
+  }
   const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: Number(SMTP_PORT) || 587,
@@ -31,6 +34,7 @@ async function notifyByEmail({ name, email, message }) {
     subject: `Portfolio contact — ${name}`,
     text: `From: ${name} <${email}>\n\n${message}`,
   })
+  console.log('✓ Email sent successfully to', MAIL_TO)
 }
 
 router.post('/', limiter, async (req, res) => {
