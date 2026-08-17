@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import dns from 'node:dns'
 import rateLimit from 'express-rate-limit'
 import nodemailer from 'nodemailer'
 import mongoose from 'mongoose'
@@ -14,6 +15,15 @@ const limiter = rateLimit({
   message: { error: 'Too many messages — please try again later.' },
 })
 
+/* Force IPv4 DNS lookup — Render doesn't support outbound IPv6. */
+function dnsLookupIPv4(hostname, options, cb) {
+  if (typeof options === 'function') {
+    cb = options
+    options = {}
+  }
+  dns.lookup(hostname, { ...options, family: 4 }, cb)
+}
+
 /* Optional email notification if SMTP env vars are set. */
 async function notifyByEmail({ name, email, message }) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO } = process.env
@@ -27,6 +37,8 @@ async function notifyByEmail({ name, email, message }) {
     secure: Number(SMTP_PORT) === 465,
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
     family: 4,
+    dnsLookup: dnsLookupIPv4,
+    tls: { rejectUnauthorized: true },
   })
   await transporter.sendMail({
     from: `"Portfolio" <${SMTP_USER || 'noreply@portfolio.local'}>`,
