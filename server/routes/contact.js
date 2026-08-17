@@ -1,13 +1,9 @@
 import { Router } from 'express'
-import dns from 'node:dns'
-import { promisify } from 'node:util'
 import rateLimit from 'express-rate-limit'
-import nodemailer from 'nodemailer'
 import mongoose from 'mongoose'
 import Message from '../models/Message.js'
 
 const router = Router()
-const dnsLookup = promisify(dns.lookup)
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -17,46 +13,36 @@ const limiter = rateLimit({
   message: { error: 'Too many messages — please try again later.' },
 })
 
-/* Optional email notification if SMTP env vars are set. */
+/* Email notification via Resend HTTP API (bypasses Render's SMTP port block). */
 async function notifyByEmail({ name, email, message }) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO } = process.env
-  if (!SMTP_HOST || !MAIL_TO) {
-    console.warn('Email skipped — missing SMTP_HOST or MAIL_TO env var')
+  const { RESEND_API_KEY, MAIL_TO } = process.env
+  if (!RESEND_API_KEY || !MAIL_TO) {
+    console.warn('Email skipped — missing RESEND_API_KEY or MAIL_TO env var')
     return
   }
 
-  /* Resolve SMTP hostname to IPv4 manually — Render blocks outbound IPv6. */
-  const { address: ipv4 } = await dnsLookup(SMTP_HOST, { family: 4 })
-  console.log(`SMTP resolved: ${SMTP_HOST} → ${ipv4}`)
-
-  const transporter = nodemailer.createTransport({
-    host: ipv4,
-    port: Number(SMTP_PORT) || 587,
-    secure: Number(SMTP_PORT) === 465,
-    auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-    tls: {
-      servername: SMTP_HOST,
-      rejectUnauthorized: true,
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    logger: true,
-    debug: true,
+    body: JSON.stringify({
+      from: 'Portfolio Contact <onboarding@resend.dev>',
+      to: [MAIL_TO],
+      reply_to: email,
+      subject: `Portfolio contact — ${name}`,
+      text: `From: ${name} <${email}>\n\n${message}`,
+    }),
   })
 
-  console.log('Verifying SMTP connection...')
-  await transporter.verify()
-  console.log('SMTP connection verified ✓ — sending mail...')
+  const data = await res.json()
 
-  const info = await transporter.sendMail({
-    from: `"Portfolio" <${SMTP_USER || 'noreply@portfolio.local'}>`,
-    to: MAIL_TO,
-    replyTo: email,
-    subject: `Portfolio contact — ${name}`,
-    text: `From: ${name} <${email}>\n\n${message}`,
-  })
-  console.log('✓ Email sent successfully to', MAIL_TO, '| messageId:', info.messageId)
+  if (!res.ok) {
+    throw new Error(`Resend API error ${res.status}: ${JSON.stringify(data)}`)
+  }
+
+  console.log('✓ Email sent via Resend to', MAIL_TO, '| id:', data.id)
 }
 
 router.post('/', limiter, async (req, res) => {
