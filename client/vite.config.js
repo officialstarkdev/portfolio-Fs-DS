@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  publicDir: '../public',
+  publicDir: './public',
   plugins: [react()],
   server: {
     port: 3000,
@@ -12,13 +12,14 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          three: ['three', '@react-three/fiber', '@react-three/drei'],
-          gsap: ['gsap', '@gsap/react'],
-        },
+  rollupOptions: {
+    output: {
+      manualChunks(id) {
+        if (id.includes('node_modules')) {
+          if (id.includes('three')) return 'three'
+          if (id.includes('react')) return 'vendor'
+        }
       },
     },
   },
-})
+}})
