@@ -35,18 +35,28 @@ async function notifyByEmail({ name, email, message }) {
     secure: Number(SMTP_PORT) === 465,
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
     tls: {
-      servername: SMTP_HOST,   // validate cert against the real hostname
+      servername: SMTP_HOST,
       rejectUnauthorized: true,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    logger: true,
+    debug: true,
   })
-  await transporter.sendMail({
+
+  console.log('Verifying SMTP connection...')
+  await transporter.verify()
+  console.log('SMTP connection verified ✓ — sending mail...')
+
+  const info = await transporter.sendMail({
     from: `"Portfolio" <${SMTP_USER || 'noreply@portfolio.local'}>`,
     to: MAIL_TO,
     replyTo: email,
     subject: `Portfolio contact — ${name}`,
     text: `From: ${name} <${email}>\n\n${message}`,
   })
-  console.log('✓ Email sent successfully to', MAIL_TO)
+  console.log('✓ Email sent successfully to', MAIL_TO, '| messageId:', info.messageId)
 }
 
 router.post('/', limiter, async (req, res) => {
