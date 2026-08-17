@@ -1,8 +1,13 @@
 import 'dotenv/config'
+import dns from 'node:dns'
 import express from 'express'
 import cors from 'cors'
 import mongoose from 'mongoose'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import contactRouter from './routes/contact.js'
+
+dns.setDefaultResultOrder('ipv4first')
 
 const app = express()
 app.set('trust proxy', 1)

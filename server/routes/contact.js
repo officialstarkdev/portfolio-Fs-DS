@@ -26,6 +26,7 @@ async function notifyByEmail({ name, email, message }) {
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+    family: 4,
   })
   await transporter.sendMail({
     from: `"Portfolio" <${SMTP_USER || 'noreply@portfolio.local'}>`,
