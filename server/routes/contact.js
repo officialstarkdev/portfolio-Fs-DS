@@ -1,11 +1,13 @@
 import { Router } from 'express'
 import dns from 'node:dns'
+import { promisify } from 'node:util'
 import rateLimit from 'express-rate-limit'
 import nodemailer from 'nodemailer'
 import mongoose from 'mongoose'
 import Message from '../models/Message.js'
 
 const router = Router()
+const dnsLookup = promisify(dns.lookup)
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -15,15 +17,6 @@ const limiter = rateLimit({
   message: { error: 'Too many messages — please try again later.' },
 })
 
-/* Force IPv4 DNS lookup — Render doesn't support outbound IPv6. */
-function dnsLookupIPv4(hostname, options, cb) {
-  if (typeof options === 'function') {
-    cb = options
-    options = {}
-  }
-  dns.lookup(hostname, { ...options, family: 4 }, cb)
-}
-
 /* Optional email notification if SMTP env vars are set. */
 async function notifyByEmail({ name, email, message }) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO } = process.env
@@ -31,14 +24,20 @@ async function notifyByEmail({ name, email, message }) {
     console.warn('Email skipped — missing SMTP_HOST or MAIL_TO env var')
     return
   }
+
+  /* Resolve SMTP hostname to IPv4 manually — Render blocks outbound IPv6. */
+  const { address: ipv4 } = await dnsLookup(SMTP_HOST, { family: 4 })
+  console.log(`SMTP resolved: ${SMTP_HOST} → ${ipv4}`)
+
   const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
+    host: ipv4,
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-    family: 4,
-    dnsLookup: dnsLookupIPv4,
-    tls: { rejectUnauthorized: true },
+    tls: {
+      servername: SMTP_HOST,   // validate cert against the real hostname
+      rejectUnauthorized: true,
+    },
   })
   await transporter.sendMail({
     from: `"Portfolio" <${SMTP_USER || 'noreply@portfolio.local'}>`,
