@@ -5,6 +5,7 @@ import mongoose from 'mongoose'
 import contactRouter from './routes/contact.js'
 
 const app = express()
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 5000
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/portfolio'
 
