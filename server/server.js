@@ -14,8 +14,19 @@ app.set('trust proxy', 1)
 const PORT = process.env.PORT || 5000
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/portfolio'
 
+/* CLIENT_URL mein ek ya zyada origins comma se alag karke likh sakte ho, e.g.
+   CLIENT_URL=https://purana-portfolio.onrender.com,https://naya-portfolio.onrender.com */
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean)
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin(origin, callback) {
+    // origin undefined = server-to-server / curl / health checks
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    return callback(null, false)
+  },
   credentials: true,
 }))
 app.use(express.json({ limit: '32kb' }))
